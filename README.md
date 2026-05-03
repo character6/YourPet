@@ -1,17 +1,24 @@
-# project_tp
+# Ваш питомец (учебный MVP)
 
-A new Flutter project.
+Кроссплатформенное приложение на **Flutter** для учёта ухода за домашним животным: профиль, дневник, напоминания, документы и настройки. Данные по умолчанию хранятся **локально**; в репозитории подготовлен **Firebase-бэкенд** для будущей синхронизации и облачных функций.
 
-## Getting Started
+## Возможности
 
-This project is a starting point for a Flutter application.
+| Область | Что сделано |
+|--------|-------------|
+| **Профиль питомца** | Вид, порода, дата рождения, вес, фото (с устройства / на web — заглушка под платформу) |
+| **Дневник** | Записи с типом, текстом, статусом, вложениями (файлы — полноценно на мобильных/desktop с `dart:io`) |
+| **Напоминания** | Создание, повтор, вкл/выкл; **локальные уведомления** на поддерживаемых платформах (на web не применимо) |
+| **Документы** | Импорт PDF/JPG/PNG, список, просмотр (PDF через **pdfx**; на web настроен **PDF.js** в `web/index.html`) |
+| **Настройки** | Тема (системная / светлая / тёмная), сброс пользовательских данных, экспорт (где доступен **dart:io**) |
+| **Данные** | **SQLite** через **sqflite**; на **web** — **sqflite_common_ffi_web** и файл **`web/sqlite3.wasm`** (версия wasm должна совпадать с транзитивным пакетом `sqlite3`, см. комментарий в `lib/web_db.dart`) |
 
-A few resources to get you started if this is your first Flutter project:
+## Технологии
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Flutter** (Dart SDK из `pubspec.yaml`)
+- **Provider** — состояние (`PetCareController`)
+- **sqflite** + **sqflite_common_ffi_web** (web)
+- **path_provider** — каталоги приложения (на web не используется для документов; см. `lib/data/petcare_database.dart`)
+- **flutter_local_notifications**, **timezone**, **flutter_timezone**
+- **file_picker**, **image_picker**, **pdfx**, **share_plus**, **archive** (экспорт ZIP там, где есть файловая система)
+- Условные импорты: `lib/platform/local_fs.dart`, просмотр документов, фото, экспорт — отдельные реализации под IO и web
