@@ -1,0 +1,127 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    function isCreateOwner() {
+      return isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    function validPetDoc() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'userId', 'species', 'breed', 'birthDate', 'weightKg', 'photoStoragePath',
+          'createdAt', 'updatedAt', 'localId', 'syncedAt'
+        ])
+        && d.userId == request.auth.uid
+        && d.species is string && d.species.size() <= 120
+        && d.breed is string && d.breed.size() <= 120
+        && (d.birthDate is timestamp || (d.birthDate is string && d.birthDate.size() <= 32))
+        && d.weightKg is number && d.weightKg >= 0 && d.weightKg <= 500
+        && (!('photoStoragePath' in d) || d.photoStoragePath is string && d.photoStoragePath.size() <= 1024)
+        && (!('localId' in d) || d.localId is string && d.localId.size() <= 128);
+    }
+
+    function validDiaryDoc() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'userId', 'petId', 'date', 'type', 'text', 'attachmentPaths', 'status',
+          'createdAt', 'updatedAt', 'localId', 'syncedAt'
+        ])
+        && d.userId == request.auth.uid
+        && d.petId is string
+        && d.date is timestamp
+        && d.type in ['symptom', 'visit', 'note']
+        && d.text is string && d.text.size() <= 10000
+        && d.status is string && d.status.size() <= 64
+        && (!('attachmentPaths' in d) || d.attachmentPaths is list && d.attachmentPaths.size() <= 20);
+    }
+
+    function validReminderDoc() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'userId', 'petId', 'title', 'scheduledAt', 'repeat', 'nextFireAt', 'timezone',
+          'createdAt', 'updatedAt', 'localId', 'syncedAt', 'enabled'
+        ])
+        && d.userId == request.auth.uid
+        && d.petId is string
+        && d.title is string && d.title.size() <= 200
+        && d.scheduledAt is timestamp
+        && (d.nextFireAt == null || d.nextFireAt is timestamp)
+        && d.repeat in ['once', 'daily', 'weekly', 'by_date']
+        && (!('timezone' in d) || d.timezone is string && d.timezone.size() <= 64)
+        && (!('enabled' in d) || d.enabled is bool);
+    }
+
+    function validDocumentMeta() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'userId', 'petId', 'fileName', 'mimeType', 'storagePath', 'sizeBytes',
+          'uploadedAt', 'updatedAt', 'localId', 'syncedAt'
+        ])
+        && d.userId == request.auth.uid
+        && d.petId is string
+        && d.fileName is string && d.fileName.size() <= 255
+        && d.mimeType in ['application/pdf', 'image/jpeg', 'image/png']
+        && d.storagePath is string && d.storagePath.size() <= 1024
+        && d.sizeBytes is int && d.sizeBytes >= 0 && d.sizeBytes <= 15728640
+        && d.uploadedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+
+    match /pets/{petId} {
+      allow read: if isDocOwner();
+      allow create: if isCreateOwner() && validPetDoc();
+      allow update: if isDocOwner() && validPetDoc();
+      allow delete: if isDocOwner();
+    }
+
+    match /diary_entries/{entryId} {
+      allow read: if isDocOwner();
+      allow create: if isCreateOwner() && validDiaryDoc();
+      allow update: if isDocOwner() && validDiaryDoc();
+      allow delete: if isDocOwner();
+    }
+
+    match /reminders/{reminderId} {
+      allow read: if isDocOwner();
+      allow create: if isCreateOwner() && validReminderDoc();
+      allow update: if isDocOwner() && validReminderDoc();
+      allow delete: if isDocOwner();
+    }
+
+    match /documents/{docId} {
+      allow read: if isDocOwner();
+      allow create: if isCreateOwner() && validDocumentMeta();
+      allow update: if isDocOwner() && validDocumentMeta();
+      allow delete: if isDocOwner();
+    }
+
+    // Очередь офлайн-синхронизации (B05)
+    match /sync_queue/{jobId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['userId', 'entity', 'operation'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.entity is string
+        && request.resource.data.entity.size() <= 64
+        && request.resource.data.operation in ['create', 'update', 'delete'];
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
