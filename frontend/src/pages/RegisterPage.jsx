@@ -29,7 +29,7 @@ export default function RegisterPage() {
     <div className="container" style={{ maxWidth: 440, paddingTop: 80 }}>
       <div className="card">
         <div className="site-logo" style={{ marginBottom: 12 }}>
-          <img src="/logo.png" alt="" width={32} height={32} />
+          <img src="/logo.png" alt="" width={48} height={48} />
           <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Регистрация</h1>
         </div>
         <p style={{ color: 'var(--muted)' }}>Создайте аккаунт для ведения дневника питомца</p>

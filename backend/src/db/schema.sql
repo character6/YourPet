@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(255) NOT NULL,
   subscription_tier VARCHAR(20) NOT NULL DEFAULT 'free' CHECK (subscription_tier IN ('free', 'premium')),
   subscription_expires_at TIMESTAMPTZ,
+  family_referral_token UUID UNIQUE DEFAULT gen_random_uuid(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -82,7 +83,7 @@ CREATE TABLE IF NOT EXISTS calendar_tasks (
   title VARCHAR(255) NOT NULL,
   task_type VARCHAR(20) NOT NULL CHECK (task_type IN ('feeding', 'walk', 'medicine', 'other')),
   scheduled_at TIMESTAMPTZ NOT NULL,
-  recurrence VARCHAR(20) NOT NULL DEFAULT 'once' CHECK (recurrence IN ('once', 'daily', 'weekly', 'monthly')),
+  recurrence VARCHAR(30) NOT NULL DEFAULT 'once' CHECK (recurrence IN ('once', 'daily', 'weekly', 'monthly', 'every_4h', 'every_6h', 'every_12h')),
   completed_at TIMESTAMPTZ,
   completed_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

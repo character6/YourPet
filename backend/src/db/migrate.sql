@@ -28,3 +28,11 @@ SELECT id, weight, CURRENT_DATE, 'Начальный вес'
 FROM pets
 WHERE weight IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM weight_records wr WHERE wr.pet_id = pets.id);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS family_referral_token UUID UNIQUE DEFAULT gen_random_uuid();
+UPDATE users SET family_referral_token = gen_random_uuid() WHERE family_referral_token IS NULL;
+
+ALTER TABLE calendar_tasks DROP CONSTRAINT IF EXISTS calendar_tasks_recurrence_check;
+ALTER TABLE calendar_tasks ALTER COLUMN recurrence TYPE VARCHAR(30);
+ALTER TABLE calendar_tasks ADD CONSTRAINT calendar_tasks_recurrence_check
+  CHECK (recurrence IN ('once', 'daily', 'weekly', 'monthly', 'every_4h', 'every_6h', 'every_12h'));

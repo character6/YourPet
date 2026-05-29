@@ -9,6 +9,7 @@ import {
   requirePremium,
   canAccessPet,
 } from '../middleware/auth.js';
+import { safeDownloadName } from '../utils/filename.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FONT_REGULAR = path.join(__dirname, '../../node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf');
@@ -156,7 +157,7 @@ router.get('/care-history', async (req, res, next) => {
       tasks.rows
     );
 
-    const filename = `yourpet-${pet.name.replace(/\s+/g, '-')}-report.pdf`;
+    const filename = safeDownloadName(`yourpet-${pet.name.replace(/\s+/g, '-')}-report.pdf`, 'report.pdf');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Length', buffer.length);
     res.setHeader(

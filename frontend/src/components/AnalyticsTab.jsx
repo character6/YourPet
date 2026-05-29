@@ -31,7 +31,8 @@ async function downloadCareReport(petId, petName) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `yourpet-${petName}-report.pdf`;
+  const safeName = petName.replace(/[<>:"/\\|?*]/g, '_').trim() || 'pet';
+  a.download = `yourpet-${safeName}-report.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }

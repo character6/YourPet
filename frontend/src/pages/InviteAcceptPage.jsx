@@ -24,7 +24,7 @@ export default function InviteAcceptPage() {
     try {
       const data = await api.acceptInvite(token);
       setMessage(`Вы присоединились к «${data.petName}»`);
-      setTimeout(() => navigate(`/pets/${data.petId}`), 1000);
+      setTimeout(() => navigate(data.petsAdded > 1 ? '/' : `/pets/${data.petId}`), 1000);
     } catch (err) {
       setError(err.message);
     } finally {

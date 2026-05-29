@@ -16,7 +16,12 @@ const RECURRENCE_LABELS = {
   daily: 'Каждый день',
   weekly: 'Раз в неделю',
   monthly: 'Раз в месяц',
+  every_4h: 'Каждые 4 часа',
+  every_6h: 'Каждые 6 часов',
+  every_12h: 'Каждые 12 часов',
 };
+
+const VALID_RECURRENCE = Object.keys(RECURRENCE_LABELS);
 
 function formatTask(row) {
   return {
@@ -39,6 +44,15 @@ function formatTask(row) {
 function getNextScheduledAt(current, recurrence) {
   const date = new Date(current);
   switch (recurrence) {
+    case 'every_4h':
+      date.setHours(date.getHours() + 4);
+      break;
+    case 'every_6h':
+      date.setHours(date.getHours() + 6);
+      break;
+    case 'every_12h':
+      date.setHours(date.getHours() + 12);
+      break;
     case 'daily':
       date.setDate(date.getDate() + 1);
       break;
@@ -90,7 +104,7 @@ router.post('/', async (req, res, next) => {
     if (!title || !taskType || !scheduledAt) {
       return res.status(400).json({ error: 'Заголовок, тип и время обязательны' });
     }
-    if (!['once', 'daily', 'weekly', 'monthly'].includes(recurrence)) {
+    if (!VALID_RECURRENCE.includes(recurrence)) {
       return res.status(400).json({ error: 'Недопустимая периодичность' });
     }
 
