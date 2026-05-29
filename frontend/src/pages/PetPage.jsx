@@ -4,7 +4,6 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import PaymentModal from '../components/PaymentModal';
 import PetAvatar from '../components/PetAvatar';
-import InviteLinkBox from '../components/InviteLinkBox';
 import AnalyticsTab from '../components/AnalyticsTab';
 import { AVATAR_COLORS } from '../components/PetAvatar';
 
@@ -29,6 +28,9 @@ const TASK_TYPES = {
 
 const RECURRENCE_OPTIONS = [
   { value: 'once', label: 'Один раз' },
+  { value: 'every_4h', label: 'Каждые 4 ч' },
+  { value: 'every_6h', label: 'Каждые 6 ч' },
+  { value: 'every_12h', label: 'Каждые 12 ч' },
   { value: 'daily', label: 'Каждый день' },
   { value: 'weekly', label: 'Раз в неделю' },
   { value: 'monthly', label: 'Раз в месяц' },
@@ -57,13 +59,9 @@ export default function PetPage() {
   const [entries, setEntries] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [documents, setDocuments] = useState([]);
-  const [members, setMembers] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [referralLink, setReferralLink] = useState('');
-  const [lastInviteLink, setLastInviteLink] = useState('');
   const [error, setError] = useState('');
   const [showPayment, setShowPayment] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
 
   const [diaryForm, setDiaryForm] = useState({ entryType: 'note', title: '', content: '', entryDate: '' });
   const [reminderForm, setReminderForm] = useState({ title: '', reminderType: 'vaccination', dueDate: '' });
@@ -88,14 +86,8 @@ export default function PetPage() {
       setDocuments(docs.documents);
 
       if (isPremium) {
-        const [fam, cal, ref] = await Promise.all([
-          api.getFamilyMembers(petId).catch(() => ({ members: [] })),
-          api.getCalendarTasks(petId).catch(() => ({ tasks: [] })),
-          api.getReferralLink(petId).catch(() => ({ referralLink: '' })),
-        ]);
-        setMembers(fam.members);
+        const cal = await api.getCalendarTasks(petId).catch(() => ({ tasks: [] }));
         setTasks(cal.tasks);
-        setReferralLink(ref.referralLink || '');
       }
     } catch (err) {
       setError(err.message);
@@ -164,23 +156,6 @@ export default function PetPage() {
     }
   };
 
-  const handleInvite = async (e) => {
-    e.preventDefault();
-    if (!isPremium) {
-      setShowPayment(true);
-      return;
-    }
-    setError('');
-    try {
-      const data = await api.inviteFamily(petId, inviteEmail);
-      setLastInviteLink(data.invite.inviteLink);
-      setInviteEmail('');
-      loadAll();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   const handleTask = async (e) => {
     e.preventDefault();
     setError('');
@@ -220,7 +195,6 @@ export default function PetPage() {
     { id: 'reminders', label: 'Напоминания' },
     { id: 'documents', label: 'Документы' },
     ...(isPremium ? [
-      { id: 'family', label: 'Семья' },
       { id: 'calendar', label: 'Календарь' },
       { id: 'analytics', label: 'Аналитика' },
     ] : []),
@@ -410,50 +384,6 @@ export default function PetPage() {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {tab === 'family' && isPremium && (
-        <div className="grid-2">
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>Реферальная ссылка Premium</h2>
-            {referralLink && (
-              <InviteLinkBox
-                link={referralLink}
-                onRegenerate={() => api.regenerateReferralLink(petId).then((data) => {
-                  setReferralLink(data.referralLink);
-                })}
-              />
-            )}
-
-            <h3 style={{ marginTop: 24 }}>Пригласить по email</h3>
-            <form onSubmit={handleInvite}>
-              <div className="form-group">
-                <label>Email пользователя</label>
-                <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
-              </div>
-              <button className="btn btn-premium" type="submit">Отправить приглашение</button>
-            </form>
-
-            {lastInviteLink && (
-              <div style={{ marginTop: 20 }}>
-                <InviteLinkBox link={lastInviteLink} label="Ссылка для этого приглашения" />
-              </div>
-            )}
-          </div>
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>Члены семьи</h2>
-            {members.map((m) => (
-              <div key={m.userId} className="list-item">
-                <div>
-                  <strong>{m.name}</strong>
-                  <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
-                    {m.email} · {m.role === 'owner' ? 'Владелец' : 'Участник'}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 

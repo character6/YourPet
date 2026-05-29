@@ -24,6 +24,21 @@ function buildReferralLink(referralToken) {
   return `${FRONTEND_URL}/invite/${referralToken}`;
 }
 
+async function ensureUserReferralToken(userId) {
+  const { rows } = await pool.query(
+    'SELECT family_referral_token FROM users WHERE id = $1',
+    [userId]
+  );
+  if (rows[0]?.family_referral_token) {
+    return rows[0].family_referral_token;
+  }
+  const { rows: updated } = await pool.query(
+    'UPDATE users SET family_referral_token = gen_random_uuid() WHERE id = $1 RETURNING family_referral_token',
+    [userId]
+  );
+  return updated[0].family_referral_token;
+}
+
 router.get('/referral-link', async (req, res, next) => {
   try {
     const pet = await canAccessPet(req.user.id, req.params.petId);
@@ -221,6 +236,23 @@ invitesRouter.get('/preview/:token', async (req, res, next) => {
     }
 
     const { rows: petRows } = await pool.query(
+      `SELECT u.id, u.name AS owner_name,
+              (SELECT COUNT(*)::int FROM pets WHERE owner_id = u.id) AS pet_count
+       FROM users u
+       WHERE u.family_referral_token = $1`,
+      [req.params.token]
+    );
+
+    if (petRows[0]) {
+      const count = petRows[0].pet_count;
+      return res.json({
+        type: 'referral',
+        inviterName: petRows[0].owner_name,
+        petName: count > 1 ? `все питомцы (${count})` : 'профиль питомца',
+      });
+    }
+
+    const { rows: legacyPetRows } = await pool.query(
       `SELECT p.id, p.name, u.name AS owner_name
        FROM pets p
        JOIN users u ON u.id = p.owner_id
@@ -228,12 +260,12 @@ invitesRouter.get('/preview/:token', async (req, res, next) => {
       [req.params.token]
     );
 
-    if (petRows[0]) {
+    if (legacyPetRows[0]) {
       return res.json({
         type: 'referral',
-        petId: petRows[0].id,
-        petName: petRows[0].name,
-        inviterName: petRows[0].owner_name,
+        petId: legacyPetRows[0].id,
+        petName: legacyPetRows[0].name,
+        inviterName: legacyPetRows[0].owner_name,
       });
     }
 
@@ -273,33 +305,108 @@ invitesRouter.get('/my-invites', async (req, res, next) => {
   }
 });
 
-invitesRouter.get('/my-referral-links', async (req, res, next) => {
+invitesRouter.get('/my-referral-link', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT p.id, p.name, p.family_referral_token
-       FROM pets p
-       JOIN users u ON u.id = p.owner_id
-       WHERE p.owner_id = $1 AND u.subscription_tier = 'premium'
-       ORDER BY p.name ASC`,
-      [req.user.id]
-    );
+    if (!isPremium(req.currentUser)) {
+      return res.status(403).json({ error: 'Реферальная ссылка доступна только с Premium' });
+    }
 
-    const links = rows
-      .filter((r) => isPremium(req.currentUser))
-      .map((r) => ({
-        petId: r.id,
-        petName: r.name,
-        referralLink: buildReferralLink(r.family_referral_token),
-        token: r.family_referral_token,
-      }));
-
-    res.json({ links });
+    const token = await ensureUserReferralToken(req.user.id);
+    res.json({
+      referralLink: buildReferralLink(token),
+      token,
+    });
   } catch (err) {
     next(err);
   }
 });
 
+invitesRouter.post('/my-referral-link/regenerate', async (req, res, next) => {
+  try {
+    if (!isPremium(req.currentUser)) {
+      return res.status(403).json({ error: 'Реферальная ссылка доступна только с Premium' });
+    }
+
+    const { rows } = await pool.query(
+      'UPDATE users SET family_referral_token = gen_random_uuid() WHERE id = $1 RETURNING family_referral_token',
+      [req.user.id]
+    );
+
+    res.json({
+      referralLink: buildReferralLink(rows[0].family_referral_token),
+      token: rows[0].family_referral_token,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function acceptUserReferral(req, res, ownerId) {
+  const { rows: ownerRows } = await pool.query(
+    'SELECT subscription_tier, subscription_expires_at FROM users WHERE id = $1',
+    [ownerId]
+  );
+  const owner = ownerRows[0];
+  const ownerPremium = owner?.subscription_tier === 'premium' &&
+    (!owner.subscription_expires_at || new Date(owner.subscription_expires_at) > new Date());
+
+  if (!ownerPremium) {
+    return res.status(403).json({ error: 'Семейный доступ доступен только у Premium-владельца' });
+  }
+
+  if (ownerId === req.user.id) {
+    return res.status(400).json({ error: 'Нельзя принять своё приглашение' });
+  }
+
+  const { rows: pets } = await pool.query(
+    'SELECT id, name FROM pets WHERE owner_id = $1 ORDER BY created_at ASC',
+    [ownerId]
+  );
+
+  if (pets.length === 0) {
+    return res.status(404).json({ error: 'У владельца пока нет питомцев' });
+  }
+
+  let added = 0;
+  for (const pet of pets) {
+    const memberCount = await getFamilyMemberCount(pet.id);
+    if (memberCount >= MAX_FAMILY_MEMBERS) continue;
+
+    const existing = await pool.query(
+      'SELECT 1 FROM pet_members WHERE pet_id = $1 AND user_id = $2',
+      [pet.id, req.user.id]
+    );
+    if (existing.rows.length > 0) continue;
+
+    await pool.query(
+      'INSERT INTO pet_members (pet_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [pet.id, req.user.id, 'member']
+    );
+    added += 1;
+  }
+
+  if (added === 0) {
+    return res.status(409).json({ error: 'Вы уже добавлены ко всем питомцам или достигнут лимит семьи' });
+  }
+
+  return res.json({
+    success: true,
+    petId: pets[0].id,
+    petName: added > 1 ? `все питомцы (${added})` : pets[0].name,
+    petsAdded: added,
+  });
+}
+
 async function acceptReferral(req, res, next, token) {
+  const { rows: userRows } = await pool.query(
+    'SELECT id FROM users WHERE family_referral_token = $1',
+    [token]
+  );
+
+  if (userRows[0]) {
+    return acceptUserReferral(req, res, userRows[0].id);
+  }
+
   const { rows: petRows } = await pool.query(
     `SELECT p.*, u.subscription_tier, u.subscription_expires_at
      FROM pets p

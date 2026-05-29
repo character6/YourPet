@@ -78,13 +78,11 @@ export const api = {
 
   getFamilyMembers: (petId) => request(`/pets/${petId}/family/members`),
   getFamilyInvites: (petId) => request(`/pets/${petId}/family/invites`),
-  getReferralLink: (petId) => request(`/pets/${petId}/family/referral-link`),
-  regenerateReferralLink: (petId) =>
-    request(`/pets/${petId}/family/referral-link/regenerate`, { method: 'POST' }),
   inviteFamily: (petId, email) =>
     request(`/pets/${petId}/family/invite`, { method: 'POST', body: JSON.stringify({ email }) }),
   getMyInvites: () => request('/invites/my-invites'),
-  getMyReferralLinks: () => request('/invites/my-referral-links'),
+  getMyReferralLink: () => request('/invites/my-referral-link'),
+  regenerateReferralLink: () => request('/invites/my-referral-link/regenerate', { method: 'POST' }),
   getInvitePreview: (token) => request(`/invites/preview/${token}`),
   acceptInvite: (token) => request(`/invites/accept/${token}`, { method: 'POST' }),
 

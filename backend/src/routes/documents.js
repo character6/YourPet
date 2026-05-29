@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/db.js';
 import { authenticate, loadUser, canAccessPet } from '../middleware/auth.js';
+import { fixFilenameEncoding, safeDownloadName } from '../utils/filename.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
@@ -51,7 +52,7 @@ function formatDocument(row) {
     id: row.id,
     petId: row.pet_id,
     userId: row.user_id,
-    originalName: row.original_name,
+    originalName: fixFilenameEncoding(row.original_name),
     mimeType: row.mime_type,
     size: row.size,
     uploadedAt: row.uploaded_at,
@@ -96,7 +97,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
         req.params.petId,
         req.user.id,
         req.file.filename,
-        req.file.originalname,
+        fixFilenameEncoding(req.file.originalname),
         req.file.mimetype,
         req.file.size,
       ]
@@ -131,7 +132,12 @@ router.get('/:docId/download', async (req, res, next) => {
       return res.status(404).json({ error: 'Файл не найден на сервере' });
     }
 
-    res.download(filePath, doc.original_name);
+    const downloadName = safeDownloadName(doc.original_name, 'document');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(downloadName)}`
+    );
+    res.sendFile(filePath);
   } catch (err) {
     next(err);
   }

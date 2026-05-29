@@ -1,222 +1,106 @@
 import { useEffect, useState } from 'react';
-
-import { Link, useNavigate } from 'react-router-dom';
-
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-
 import { useAuth } from '../context/AuthContext';
-
 import InviteLinkBox from '../components/InviteLinkBox';
 
-
-
 export default function InvitesPage() {
-
   const { isPremium } = useAuth();
-
   const navigate = useNavigate();
-
   const [invites, setInvites] = useState([]);
-
-  const [referralLinks, setReferralLinks] = useState([]);
-
+  const [referralLink, setReferralLink] = useState('');
   const [error, setError] = useState('');
-
   const [message, setMessage] = useState('');
 
-
-
   const load = () => {
-
     api.getMyInvites()
-
       .then(({ invites }) => setInvites(invites))
-
       .catch((err) => setError(err.message));
 
-
-
     if (isPremium) {
-
-      api.getMyReferralLinks()
-
-        .then(({ links }) => setReferralLinks(links))
-
-        .catch(() => {});
-
+      api.getMyReferralLink()
+        .then(({ referralLink: link }) => setReferralLink(link))
+        .catch(() => setReferralLink(''));
     }
-
   };
-
-
 
   useEffect(load, [isPremium]);
 
-
-
   const accept = async (token) => {
-
     try {
-
       const data = await api.acceptInvite(token);
-
-      setMessage(`Вы присоединились к профилю «${data.petName}»`);
-
+      setMessage(`Вы присоединились: ${data.petName}`);
       load();
-
-      setTimeout(() => navigate(`/pets/${data.petId}`), 1000);
-
+      setTimeout(() => navigate(data.petId ? `/pets/${data.petId}` : '/'), 1000);
     } catch (err) {
-
       setError(err.message);
-
     }
-
   };
 
-
-
-  const regenerate = async (petId) => {
-
+  const regenerate = async () => {
     try {
-
-      await api.regenerateReferralLink(petId);
-
-      load();
-
+      const data = await api.regenerateReferralLink();
+      setReferralLink(data.referralLink);
       setMessage('Ссылка обновлена');
-
     } catch (err) {
-
       setError(err.message);
-
     }
-
   };
-
-
 
   return (
-
     <div>
-
       <h1>Приглашения</h1>
-
       <p style={{ color: 'var(--muted)' }}>
-
-        Входящие приглашения и ваши реферальные ссылки Premium
-
+        Одна ссылка для доступа ко всем вашим питомцам (Premium)
       </p>
 
-
-
       {error && <div className="alert alert-error">{error}</div>}
-
       {message && <div className="alert alert-success">{message}</div>}
 
-
-
-      {isPremium && referralLinks.length > 0 && (
-
+      {isPremium && referralLink && (
         <div className="card" style={{ marginBottom: 24 }}>
-
-          <h2 style={{ marginTop: 0 }}>Мои реферальные ссылки</h2>
-
+          <h2 style={{ marginTop: 0 }}>Реферальная ссылка Premium</h2>
           <p style={{ color: 'var(--muted)', marginTop: 0 }}>
-            Поделитесь ссылкой — близкие смогут присоединиться к профилю питомца.
-            На продакшене адрес будет ваш домен (настраивается в FRONTEND_URL на сервере).
+            Отправьте одну ссылку — близкие получат доступ ко всем вашим питомцам после входа в аккаунт.
           </p>
-
-          {referralLinks.map((item) => (
-
-            <div key={item.petId} style={{ marginBottom: 20 }}>
-
-              <strong>{item.petName}</strong>
-
-              <InviteLinkBox
-
-                link={item.referralLink}
-
-                label="Реферальная ссылка Premium"
-
-                onRegenerate={() => regenerate(item.petId)}
-
-              />
-
-            </div>
-
-          ))}
-
+          <InviteLinkBox
+            link={referralLink}
+            label="Ссылка-приглашение"
+            onRegenerate={regenerate}
+          />
         </div>
-
       )}
 
-
-
-      {isPremium && referralLinks.length === 0 && (
-
+      {isPremium && !referralLink && (
         <div className="card" style={{ marginBottom: 24 }}>
-
           <p style={{ margin: 0, color: 'var(--muted)' }}>
-
-            Добавьте питомца, чтобы получить реферальную ссылку для семейного доступа.
-
+            Оформите Premium и добавьте питомца, чтобы получить ссылку.
           </p>
-
         </div>
-
       )}
-
-
 
       <h2>Входящие приглашения</h2>
-
       {invites.length === 0 ? (
-
         <div className="card empty-state">
-
           <p>Нет активных приглашений</p>
-
         </div>
-
       ) : (
-
         <div className="card">
-
           {invites.map((invite) => (
-
             <div key={invite.id} className="list-item">
-
               <div>
-
                 <strong>{invite.petName}</strong>
-
                 <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
-
                   Пригласил(а): {invite.inviterName} · {new Date(invite.createdAt).toLocaleDateString('ru-RU')}
-
                 </div>
-
               </div>
-
               <button type="button" className="btn btn-primary" onClick={() => accept(invite.token)}>
-
                 Принять
-
               </button>
-
             </div>
-
           ))}
-
         </div>
-
       )}
-
     </div>
-
   );
-
 }
-
-

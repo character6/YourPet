@@ -28,7 +28,7 @@ export default function Layout() {
           flexWrap: 'wrap',
         }}>
           <Link to="/" className="site-logo">
-            <img src="/logo.png" alt="" width={28} height={28} />
+            <img src="/logo.png" alt="" width={44} height={44} />
             YourPet
           </Link>
 
