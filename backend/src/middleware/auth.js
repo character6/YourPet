@@ -49,10 +49,48 @@ export function requirePremium(req, res, next) {
   next();
 }
 
+/** Premium у пользователя или у владельца питомца (семейный доступ). */
+export function petHasPremiumFeatures(pet, currentUser) {
+  if (currentUser && isPremium(currentUser)) return true;
+  if (!pet) return false;
+  return isPremium({
+    subscription_tier: pet.owner_subscription_tier,
+    subscription_expires_at: pet.owner_subscription_expires_at,
+  });
+}
+
+export async function requirePetPremiumFeatures(req, res, next) {
+  try {
+    const petId = req.params.petId;
+    if (!petId) {
+      return res.status(400).json({ error: 'petId обязателен' });
+    }
+
+    const pet = await canAccessPet(req.user.id, petId);
+    if (!pet) {
+      return res.status(404).json({ error: 'Питомец не найден' });
+    }
+    if (!petHasPremiumFeatures(pet, req.currentUser)) {
+      return res.status(403).json({
+        error: 'Эта функция доступна только для Premium-профиля питомца',
+        code: 'PREMIUM_REQUIRED',
+      });
+    }
+
+    req.pet = pet;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function canAccessPet(userId, petId) {
   const { rows } = await pool.query(
-    `SELECT p.*, pm.role
+    `SELECT p.*, pm.role,
+            ou.subscription_tier AS owner_subscription_tier,
+            ou.subscription_expires_at AS owner_subscription_expires_at
      FROM pets p
+     JOIN users ou ON ou.id = p.owner_id
      LEFT JOIN pet_members pm ON pm.pet_id = p.id AND pm.user_id = $1
      WHERE p.id = $2 AND (p.owner_id = $1 OR pm.user_id = $1)`,
     [userId, petId]

@@ -3,13 +3,13 @@ import pool from '../config/db.js';
 import {
   authenticate,
   loadUser,
-  requirePremium,
+  requirePetPremiumFeatures,
   canAccessPet,
 } from '../middleware/auth.js';
 
 const router = Router({ mergeParams: true });
 
-router.use(authenticate, loadUser, requirePremium);
+router.use(authenticate, loadUser, requirePetPremiumFeatures);
 
 router.get('/', async (req, res, next) => {
   try {

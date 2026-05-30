@@ -10,6 +10,7 @@ import {
   loadUser,
   isPremium,
   canAccessPet,
+  petHasPremiumFeatures,
 } from '../middleware/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,7 +67,7 @@ const router = Router();
 
 router.use(authenticate, loadUser);
 
-function formatPet(row) {
+function formatPet(row, currentUser) {
   return {
     id: row.id,
     ownerId: row.owner_id,
@@ -80,6 +81,7 @@ function formatPet(row) {
     photoUrl: row.photo_filename ? `/api/pets/${row.id}/photo` : null,
     familyReferralToken: row.family_referral_token,
     role: row.role || 'owner',
+    hasPremiumFeatures: petHasPremiumFeatures(row, currentUser),
     createdAt: row.created_at,
   };
 }
@@ -110,14 +112,17 @@ async function getUserPetCount(userId) {
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT p.*, COALESCE(pm.role, 'owner') AS role
+      `SELECT p.*, COALESCE(pm.role, 'owner') AS role,
+              ou.subscription_tier AS owner_subscription_tier,
+              ou.subscription_expires_at AS owner_subscription_expires_at
        FROM pets p
+       JOIN users ou ON ou.id = p.owner_id
        LEFT JOIN pet_members pm ON pm.pet_id = p.id AND pm.user_id = $1
        WHERE p.owner_id = $1 OR pm.user_id = $1
        ORDER BY p.created_at DESC`,
       [req.user.id]
     );
-    res.json({ pets: rows.map(formatPet) });
+    res.json({ pets: rows.map((row) => formatPet(row, req.currentUser)) });
   } catch (err) {
     next(err);
   }
@@ -150,7 +155,7 @@ router.get('/:id', async (req, res, next) => {
     if (!pet) {
       return res.status(404).json({ error: 'Питомец не найден' });
     }
-    res.json({ pet: formatPet(pet) });
+    res.json({ pet: formatPet(pet, req.currentUser) });
   } catch (err) {
     next(err);
   }
@@ -189,7 +194,17 @@ router.post('/', async (req, res, next) => {
       await recordWeight(pet.id, weight, 'Начальный вес');
     }
 
-    res.status(201).json({ pet: formatPet({ ...pet, role: 'owner' }) });
+    res.status(201).json({
+      pet: formatPet(
+        {
+          ...pet,
+          role: 'owner',
+          owner_subscription_tier: req.currentUser.subscription_tier,
+          owner_subscription_expires_at: req.currentUser.subscription_expires_at,
+        },
+        req.currentUser
+      ),
+    });
   } catch (err) {
     next(err);
   }
@@ -231,7 +246,17 @@ router.put('/:id', async (req, res, next) => {
       await recordWeight(req.params.id, weight, 'Обновление профиля');
     }
 
-    res.json({ pet: formatPet({ ...rows[0], role: pet.role || 'owner' }) });
+    res.json({
+      pet: formatPet(
+        {
+          ...rows[0],
+          role: pet.role || 'owner',
+          owner_subscription_tier: pet.owner_subscription_tier,
+          owner_subscription_expires_at: pet.owner_subscription_expires_at,
+        },
+        req.currentUser
+      ),
+    });
   } catch (err) {
     next(err);
   }
@@ -262,7 +287,17 @@ router.post('/:id/photo', uploadPhoto, async (req, res, next) => {
       [req.file.filename, req.params.id]
     );
 
-    res.json({ pet: formatPet({ ...rows[0], role: pet.role || 'owner' }) });
+    res.json({
+      pet: formatPet(
+        {
+          ...rows[0],
+          role: pet.role || 'owner',
+          owner_subscription_tier: pet.owner_subscription_tier,
+          owner_subscription_expires_at: pet.owner_subscription_expires_at,
+        },
+        req.currentUser
+      ),
+    });
   } catch (err) {
     if (req.file) fs.unlinkSync(req.file.path);
     next(err);
@@ -289,7 +324,17 @@ router.delete('/:id/photo', async (req, res, next) => {
       [req.params.id]
     );
 
-    res.json({ pet: formatPet({ ...rows[0], role: pet.role || 'owner' }) });
+    res.json({
+      pet: formatPet(
+        {
+          ...rows[0],
+          role: pet.role || 'owner',
+          owner_subscription_tier: pet.owner_subscription_tier,
+          owner_subscription_expires_at: pet.owner_subscription_expires_at,
+        },
+        req.currentUser
+      ),
+    });
   } catch (err) {
     next(err);
   }

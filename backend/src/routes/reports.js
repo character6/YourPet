@@ -6,7 +6,7 @@ import pool from '../config/db.js';
 import {
   authenticate,
   loadUser,
-  requirePremium,
+  requirePetPremiumFeatures,
   canAccessPet,
 } from '../middleware/auth.js';
 import { safeDownloadName } from '../utils/filename.js';
@@ -17,7 +17,7 @@ const FONT_BOLD = path.join(__dirname, '../../node_modules/dejavu-fonts-ttf/ttf/
 
 const router = Router({ mergeParams: true });
 
-router.use(authenticate, loadUser, requirePremium);
+router.use(authenticate, loadUser, requirePetPremiumFeatures);
 
 const ENTRY_LABELS = {
   symptom: 'Симптом',

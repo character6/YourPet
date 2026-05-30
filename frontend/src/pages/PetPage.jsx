@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { useAuth } from '../context/AuthContext';
 import PaymentModal from '../components/PaymentModal';
 import PetAvatar from '../components/PetAvatar';
 import AnalyticsTab from '../components/AnalyticsTab';
@@ -53,7 +52,6 @@ async function downloadFile(petId, docId, filename) {
 
 export default function PetPage() {
   const { petId } = useParams();
-  const { isPremium } = useAuth();
   const [tab, setTab] = useState('diary');
   const [pet, setPet] = useState(null);
   const [entries, setEntries] = useState([]);
@@ -76,6 +74,7 @@ export default function PetPage() {
     try {
       const petData = await api.getPet(petId);
       setPet(petData.pet);
+      const premiumAccess = petData.pet.hasPremiumFeatures;
       const [diary, rems, docs] = await Promise.all([
         api.getDiary(petId),
         api.getReminders(petId),
@@ -85,9 +84,11 @@ export default function PetPage() {
       setReminders(rems.reminders);
       setDocuments(docs.documents);
 
-      if (isPremium) {
+      if (premiumAccess) {
         const cal = await api.getCalendarTasks(petId).catch(() => ({ tasks: [] }));
         setTasks(cal.tasks);
+      } else {
+        setTasks([]);
       }
     } catch (err) {
       setError(err.message);
@@ -96,7 +97,7 @@ export default function PetPage() {
 
   useEffect(() => {
     loadAll();
-  }, [petId, isPremium]);
+  }, [petId]);
 
   const handleDiary = async (e) => {
     e.preventDefault();
@@ -189,12 +190,14 @@ export default function PetPage() {
     );
   }
 
+  const premiumAccess = pet.hasPremiumFeatures;
+
   const tabs = [
     { id: 'profile', label: 'Профиль' },
     { id: 'diary', label: 'Дневник' },
     { id: 'reminders', label: 'Напоминания' },
     { id: 'documents', label: 'Документы' },
-    ...(isPremium ? [
+    ...(premiumAccess ? [
       { id: 'calendar', label: 'Календарь' },
       { id: 'analytics', label: 'Аналитика' },
     ] : []),
@@ -387,7 +390,7 @@ export default function PetPage() {
         </div>
       )}
 
-      {tab === 'calendar' && isPremium && (
+      {tab === 'calendar' && premiumAccess && (
         <div className="grid-2">
           <div className="card">
             <h2 style={{ marginTop: 0 }}>Новая задача</h2>
@@ -455,7 +458,7 @@ export default function PetPage() {
         </div>
       )}
 
-      {tab === 'analytics' && isPremium && (
+      {tab === 'analytics' && premiumAccess && (
         <AnalyticsTab petId={petId} petName={pet.name} />
       )}
 
